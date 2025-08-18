@@ -1,0 +1,29 @@
+[package]
+name = "iced-chess"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+futures = "0.3.31"
+tokio = { version = "1.47.1", features = ["macros", "fs"] }
+iced = { git = "https://github.com/iced-rs/iced.git", features = [
+    "tokio",
+    "wgpu",
+    "image",
+    "canvas",
+    "advanced",
+] }
+chess = "3.2.0"
+kira = "0.10.8"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+debug = false
+debug-assertions = false
+overflow-checks = false
