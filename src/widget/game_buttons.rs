@@ -29,14 +29,17 @@ pub struct GameButtons<Message, Theme: Catalog> {
     height: Length,
     class: Theme::Class<'static>,
     state: BState,
-    on_move: Box<dyn Fn(ChessMove) -> Message>,
+
+    set: Box<dyn Fn(ChessMove) -> Message>,
+    next: Message,
+    back: Message,
 }
 
 impl<Message, Theme> GameButtons<Message, Theme>
 where
     Theme: Catalog,
 {
-    pub fn new<F>(current: usize, len: usize, on_move: F) -> Self
+    pub fn new<F>(current: usize, len: usize, set: F, next: Message, back: Message) -> Self
     where
         F: 'static + Fn(ChessMove) -> Message,
     {
@@ -45,7 +48,9 @@ where
             height: Length::Fill,
             class: Theme::default(),
             state: BState { current, len },
-            on_move: Box::new(on_move),
+            set: Box::new(set),
+            next: next,
+            back: back,
         }
     }
 
@@ -79,9 +84,7 @@ where
         let wstate: &mut State = tree.state.downcast_mut();
 
         if self.state != wstate.state {
-            wstate.board_cache.clear();
-            wstate.pieces_cache.clear();
-            wstate.overlay_cache.clear();
+            wstate.cache.clear();
 
             wstate.state = self.state;
         }
@@ -124,14 +127,6 @@ where
     ) {
         let bounds = layout.bounds();
         let wstate: &mut State = state.state.downcast_mut();
-
-        // shell.request_redraw_at(window::RedrawRequest::NextFrame);
-        // match event {
-        //     Event::Window(window::Event::RedrawRequested(now)) => {
-        //         println!("{:?}", now);
-        //     }
-        //     _ => {}
-        // }
     }
 
     fn draw(
@@ -151,20 +146,14 @@ where
 }
 
 pub struct State {
-    pub(crate) board_cache: Cache,
-    pub(crate) pieces_cache: Cache,
-    pub(crate) overlay_cache: Cache,
-
+    pub(crate) cache: Cache,
     pub(crate) state: BState,
 }
 
 impl State {
     pub fn new() -> Self {
         Self {
-            board_cache: Cache::default(),
-            pieces_cache: Cache::default(),
-            overlay_cache: Cache::default(),
-
+            cache: Cache::default(),
             state: BState { current: 0, len: 0 },
         }
     }

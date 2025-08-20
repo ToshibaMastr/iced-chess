@@ -19,10 +19,7 @@ use iced::{
     widget::canvas::Cache,
 };
 
-use crate::{
-    chess::{BoardRole, GameState},
-    style::chess_board::Catalog,
-};
+use crate::{chess::GameState, style::chess_board::Catalog};
 
 use overlay::Overlay;
 use render::ChessBoardRenderer;
@@ -30,8 +27,11 @@ use render::ChessBoardRenderer;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BState {
     pub game: GameState,
-    pub role: BoardRole,
     pub flipped: bool,
+}
+
+pub struct Messages<Message> {
+    on_move: Option<Box<dyn Fn(ChessMove) -> Message>>,
 }
 
 pub struct ChessBoard<Message, Theme: Catalog> {
@@ -39,27 +39,20 @@ pub struct ChessBoard<Message, Theme: Catalog> {
     height: Length,
     class: Theme::Class<'static>,
     state: BState,
-    on_move: Box<dyn Fn(ChessMove) -> Message>,
+    message: Messages<Message>,
 }
 
 impl<Message, Theme> ChessBoard<Message, Theme>
 where
     Theme: Catalog,
 {
-    pub fn new<F>(game: GameState, flipped: bool, role: BoardRole, on_move: F) -> Self
-    where
-        F: 'static + Fn(ChessMove) -> Message,
-    {
+    pub fn new(game: GameState, flipped: bool) -> Self {
         Self {
             width: Length::Fill,
             height: Length::Fill,
             class: Theme::default(),
-            state: BState {
-                game,
-                role,
-                flipped,
-            },
-            on_move: Box::new(on_move),
+            state: BState { game, flipped },
+            message: Messages { on_move: None },
         }
     }
 
@@ -74,6 +67,15 @@ where
         self.height = height.into();
         self
     }
+
+    #[must_use]
+    pub fn on_move_maybe<F>(mut self, on_move: Option<F>) -> Self
+    where
+        F: 'static + Fn(ChessMove) -> Message,
+    {
+        self.message.on_move = on_move.map(|f| Box::new(f) as Box<dyn Fn(ChessMove) -> Message>);
+        self
+    }
 }
 
 impl<'a, Message, Theme> Widget<Message, Theme, Renderer> for ChessBoard<Message, Theme>
@@ -86,16 +88,17 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new())
+        tree::State::new(State::new(self.state))
     }
 
     fn diff(&self, tree: &mut Tree) {
         let wstate: &mut State = tree.state.downcast_mut();
 
         if self.state != wstate.state {
-            wstate.board_cache.clear();
-            wstate.pieces_cache.clear();
-            wstate.overlay_cache.clear();
+            wstate.cache.board.clear();
+            wstate.cache.board.clear();
+            wstate.cache.pieces.clear();
+            wstate.cache.overlay.clear();
 
             wstate.overlay.on_diff(&wstate.state, &self.state);
 
@@ -143,42 +146,15 @@ where
         let bounds = layout.bounds();
         let wstate: &mut State = state.state.downcast_mut();
 
-        // shell.request_redraw_at(window::RedrawRequest::NextFrame);
-        // match event {
-        //     Event::Window(window::Event::RedrawRequested(now)) => {
-        //         println!("{:?}", now);
-        //     }
-        //     _ => {}
-        // }
-
-        let event = wstate.overlay.on_event(event, bounds, cursor, &self.state);
-
-        if event != overlay::Event::None {
-            // println!("{:?}", event);
-        }
-
-        match event {
-            overlay::Event::Move(mv) => {
-                shell.publish((self.on_move)(mv));
-                wstate.board_cache.clear();
-                wstate.pieces_cache.clear();
-                wstate.overlay_cache.clear();
-                shell.request_redraw();
-            }
-            overlay::Event::Redraw(bc, pc, oc) => {
-                if bc {
-                    wstate.board_cache.clear();
-                }
-                if pc {
-                    wstate.pieces_cache.clear();
-                }
-                if oc {
-                    wstate.overlay_cache.clear();
-                }
-                shell.request_redraw();
-            }
-            overlay::Event::None => {}
-        }
+        wstate.overlay.on_event(
+            event,
+            bounds,
+            cursor,
+            &self.state,
+            &self.message,
+            &mut wstate.cache,
+            shell,
+        );
     }
 
     fn draw(
@@ -197,50 +173,56 @@ where
 
         let cbrenderer = ChessBoardRenderer::new(style, self.state, bounds);
 
-        let board_geometry = wstate.board_cache.draw(renderer, bounds.size(), |frame| {
-            cbrenderer.draw_board(frame, &wstate.overlay);
-            cbrenderer.draw_board_overlay(frame, &wstate.overlay);
-        });
-
-        let pieces_geometry = wstate.pieces_cache.draw(renderer, bounds.size(), |frame| {
-            cbrenderer.draw_pieces(frame, &wstate.overlay);
-            cbrenderer.draw_drag(frame, &wstate.overlay);
-        });
-
-        let overlay_geometry = wstate.overlay_cache.draw(renderer, bounds.size(), |frame| {
-            cbrenderer.draw_arrows(frame, &wstate.overlay);
-        });
+        let geometrys = vec![
+            wstate.cache.board.draw(renderer, bounds.size(), |frame| {
+                cbrenderer.draw_board(frame, &wstate.overlay);
+            }),
+            wstate
+                .cache
+                .board_overlay
+                .draw(renderer, bounds.size(), |frame| {
+                    cbrenderer.draw_board_overlay(frame, &wstate.overlay);
+                }),
+            wstate.cache.pieces.draw(renderer, bounds.size(), |frame| {
+                cbrenderer.draw_pieces(frame, &wstate.overlay);
+            }),
+            wstate.cache.drag.draw(renderer, bounds.size(), |frame| {
+                cbrenderer.draw_drag(frame, &wstate.overlay);
+            }),
+            wstate.cache.overlay.draw(renderer, bounds.size(), |frame| {
+                cbrenderer.draw_arrows(frame, &wstate.overlay);
+            }),
+        ];
 
         renderer.with_translation(bounds.position() - Point::ORIGIN, |renderer| {
-            renderer.draw_geometry(board_geometry);
-            renderer.draw_geometry(pieces_geometry);
-            renderer.draw_geometry(overlay_geometry);
+            for gm in geometrys {
+                renderer.draw_geometry(gm);
+            }
         });
     }
 }
 
+#[derive(Default)]
+pub struct Caches {
+    pub(crate) board: Cache,
+    pub(crate) board_overlay: Cache,
+    pub(crate) pieces: Cache,
+    pub(crate) drag: Cache,
+    pub(crate) overlay: Cache,
+}
+
 pub struct State {
     pub(crate) overlay: Overlay,
-    pub(crate) board_cache: Cache,
-    pub(crate) pieces_cache: Cache,
-    pub(crate) overlay_cache: Cache,
-
+    pub(crate) cache: Caches,
     pub(crate) state: BState,
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(state: BState) -> Self {
         Self {
             overlay: Overlay::new(),
-            board_cache: Cache::default(),
-            pieces_cache: Cache::default(),
-            overlay_cache: Cache::default(),
-
-            state: BState {
-                game: GameState::new(),
-                role: BoardRole::Spectator,
-                flipped: false,
-            },
+            cache: Caches::default(),
+            state,
         }
     }
 }

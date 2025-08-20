@@ -1,11 +1,14 @@
 #![windows_subsystem = "windows"]
 
-use chess::ChessMove;
+use chess::{BoardStatus, ChessMove, Color, MoveGen};
 use iced::{
     Alignment, Element, Task, Theme,
     widget::{button, column, horizontal_space, row, text},
 };
-use iced_chess::{chess::BoardRole, chess::GameState, widget::ChessBoard};
+use iced_chess::{
+    chess::{BoardRole, GameState},
+    widget::ChessBoard,
+};
 
 fn main() -> iced::Result {
     iced::application(ChessApp::new, ChessApp::update, ChessApp::view)
@@ -32,6 +35,7 @@ struct ChessApp {
     history: Vec<GameState>,
     current: usize,
     flipped: bool,
+    side: BoardRole,
 }
 
 impl ChessApp {
@@ -41,6 +45,7 @@ impl ChessApp {
                 history: vec![GameState::new()],
                 current: 0,
                 flipped: false,
+                side: BoardRole::Player(Color::White),
             },
             Task::none(),
         )
@@ -63,6 +68,14 @@ impl ChessApp {
                 self.history.push(state);
 
                 self.current += 1;
+
+                let color = state.board.side_to_move();
+                if !self.side.can_move(&color) && state.board.status() == BoardStatus::Ongoing {
+                    for mv in MoveGen::new_legal(&state.board) {
+                        self.update(Message::OnMove(mv));
+                        break;
+                    }
+                }
             }
             Message::Flip => {
                 self.flipped = !self.flipped;
@@ -91,33 +104,39 @@ impl ChessApp {
 
     fn view(&self) -> Element<'_, self::Message> {
         let game = self.history[self.current];
+        let color = game.board.side_to_move();
 
         let can_go_back = self.current > 0;
         let can_go_next = self.current + 1 < self.history.len();
 
-        let role = if can_go_next {
-            BoardRole::Spectator
-        } else {
-            BoardRole::Analyst
-        };
-
-        let chessboard = ChessBoard::new(game, self.flipped, role, Message::OnMove);
+        let chessboard = ChessBoard::new(game, self.flipped).on_move_maybe(
+            if !can_go_next && self.side.can_move(&color) {
+                Some(Message::OnMove)
+            } else {
+                None
+            },
+        );
 
         let manag = row![
-            button("Flip").on_press(Message::Flip),
-            button("Restart").on_press(Message::Restart),
             button("|<").on_press_maybe(can_go_back.then_some(Message::Set(0))),
             button("<").on_press_maybe(can_go_back.then_some(Message::Back)),
+            text(format!(
+                "{}{}",
+                if color == Color::White { "W" } else { "B" },
+                (self.current / 2) as usize
+            )),
             button(">").on_press_maybe(can_go_next.then_some(Message::Next)),
             button(">|")
                 .on_press_maybe(can_go_next.then_some(Message::Set(self.history.len() - 1))),
             horizontal_space(),
             text(format!(
-                "{} | {:?} | {:?}",
-                self.current,
+                "{:?} | {:?}",
                 game.board.status(),
                 game.board.side_to_move()
-            ))
+            )),
+            horizontal_space(),
+            button("Flip").on_press(Message::Flip),
+            button("Restart").on_press(Message::Restart),
         ]
         .align_y(Alignment::Center)
         .spacing(10);

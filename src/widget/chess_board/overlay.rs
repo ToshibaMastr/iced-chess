@@ -1,23 +1,15 @@
 use chess::{BitBoard, BoardStatus, ChessMove, File, MoveGen, Piece, Rank, Square};
-use iced::{Point, Rectangle, mouse, widget::canvas};
+use iced::{Point, Rectangle, advanced::Shell, mouse, widget::canvas};
 
-use super::BState;
+use super::{BState, Caches, Messages};
 use crate::{
     chess::Move,
     sound::{ChessBoardSound, SoundType},
 };
 
-#[derive(PartialEq, Debug, Clone)]
-pub enum Event {
-    None,
-    Redraw(bool, bool, bool),
-    Move(ChessMove),
-}
-
 #[derive(Clone)]
 pub struct Overlay {
     sound: ChessBoardSound,
-
     pub hints: Vec<ChessMove>,
     pub selected: Option<Square>,
     pub drag: Option<Point>,
@@ -30,7 +22,6 @@ impl Overlay {
     pub fn new() -> Self {
         Self {
             sound: ChessBoardSound::new(),
-
             hints: Vec::new(),
             selected: None,
             drag: None,
@@ -137,56 +128,64 @@ impl Overlay {
 }
 
 impl Overlay {
-    pub fn on_event(
+    pub fn on_event<Message>(
         &mut self,
         event: &canvas::Event,
         bounds: Rectangle,
         cursor: mouse::Cursor,
         state: &BState,
-    ) -> Event {
+        messages: &Messages<Message>,
+        caches: &mut Caches,
+        shell: &mut Shell<'_, Message>,
+    ) {
         match event {
             canvas::Event::Mouse(mouse_event) => {
-                self.on_event_mouse(mouse_event, bounds, cursor, state)
+                self.on_event_mouse(mouse_event, bounds, cursor, state, messages, caches, shell)
             }
-            _ => Event::None,
+            _ => return,
         }
     }
 
-    fn on_event_mouse(
+    fn on_event_mouse<Message>(
         &mut self,
         event: &mouse::Event,
         bounds: Rectangle,
         cursor: mouse::Cursor,
         state: &BState,
-    ) -> Event {
+        messages: &Messages<Message>,
+        caches: &mut Caches,
+        shell: &mut Shell<'_, Message>,
+    ) {
         match event {
             mouse::Event::ButtonPressed(mouse::Button::Right) => {
                 if let Some(sq) = Self::cursor_square(bounds, cursor, state.flipped) {
                     self.anchor = Some(sq);
                     self.clear_selection();
-                    Event::Redraw(true, false, false)
-                } else {
-                    Event::None
+
+                    caches.board_overlay.clear();
+                    shell.request_redraw();
                 }
             }
             mouse::Event::ButtonReleased(mouse::Button::Right) => {
-                if let Some(from_h) = self.anchor {
-                    if let Some(sq) = Self::cursor_square(bounds, cursor, state.flipped) {
-                        if sq == from_h {
-                            self.highlight ^= BitBoard::from_square(sq);
-                            return Event::Redraw(true, false, false);
+                let Some(from_h) = self.anchor else {
+                    return;
+                };
+
+                if let Some(sq) = Self::cursor_square(bounds, cursor, state.flipped) {
+                    if sq == from_h {
+                        self.highlight ^= BitBoard::from_square(sq);
+                        caches.board_overlay.clear();
+                    } else {
+                        let arrow = ChessMove::new(from_h, sq, None);
+                        if let Some(pos) = self.arrows.iter().position(|mv| *mv == arrow) {
+                            self.arrows.remove(pos);
                         } else {
-                            let arrow = ChessMove::new(from_h, sq, None);
-                            if let Some(pos) = self.arrows.iter().position(|mv| *mv == arrow) {
-                                self.arrows.remove(pos);
-                            } else {
-                                self.arrows.push(arrow);
-                            }
-                            return Event::Redraw(false, false, true);
+                            self.arrows.push(arrow);
                         }
+                        caches.overlay.clear();
                     }
+                    shell.request_redraw();
                 }
-                Event::None
             }
             mouse::Event::ButtonPressed(mouse::Button::Left) => {
                 if let Some(pos) = cursor.position_in(bounds) {
@@ -195,37 +194,43 @@ impl Overlay {
                     let square = Self::board_to_square(col, row);
 
                     self.clear_overlay();
+                    caches.overlay.clear();
 
                     if let Some(mv) = self.find_move(square) {
                         self.clear_selection();
-                        return Event::Move(mv);
+                        caches.board_overlay.clear();
+                        if let Some(on_move) = &messages.on_move {
+                            shell.publish((on_move)(mv));
+                        }
+                        return;
                     }
 
                     if state.game.board.piece_on(square).is_none() {
                         self.clear_selection();
-                        return Event::Redraw(true, true, true);
+                        caches.board_overlay.clear();
+                        shell.request_redraw();
+                        return;
                     }
 
                     self.hints.clear();
                     self.selected = Some(square);
                     self.drag = Some(pos);
 
-                    if let Some(color) = state.game.board.color_on(square) {
-                        if state.role.can_move(&color) {
-                            for mv in MoveGen::new_legal(&state.game.board) {
-                                if mv.get_source() == square
-                                    && (mv.get_promotion() == Some(Piece::Queen)
-                                        || mv.get_promotion().is_none())
-                                {
-                                    self.hints.push(mv);
-                                }
+                    if messages.on_move.is_some() {
+                        for mv in MoveGen::new_legal(&state.game.board) {
+                            if mv.get_source() == square
+                                && (mv.get_promotion() == Some(Piece::Queen)
+                                    || mv.get_promotion().is_none())
+                            {
+                                self.hints.push(mv);
                             }
                         }
                     }
 
-                    return Event::Redraw(true, true, true);
-                } else {
-                    Event::None
+                    caches.board_overlay.clear();
+                    caches.pieces.clear();
+                    caches.drag.clear();
+                    shell.request_redraw();
                 }
             }
             mouse::Event::ButtonReleased(mouse::Button::Left) => {
@@ -233,22 +238,29 @@ impl Overlay {
                 if let Some(sq) = Self::cursor_square(bounds, cursor, state.flipped) {
                     if let Some(mv) = self.find_move(sq) {
                         self.clear_selection();
-                        return Event::Move(mv);
+                        if let Some(on_move) = &messages.on_move {
+                            shell.publish((on_move)(mv));
+                        }
                     }
                 }
-                Event::Redraw(true, true, false)
+                caches.board_overlay.clear();
+                caches.pieces.clear();
+                caches.drag.clear();
+                caches.overlay.clear();
+                shell.request_redraw();
             }
             mouse::Event::CursorMoved { position: _ } => {
                 if self.drag.is_some() {
                     if let Some(pos) = cursor.position_in(bounds) {
                         let (col, row) = Self::pos_to_board(bounds, pos, state.flipped);
                         self.drag = Some(Point::new(col, row));
-                        return Event::Redraw(true, true, false);
+                        caches.drag.clear();
+                        caches.board_overlay.clear();
+                        shell.request_redraw();
                     }
                 }
-                Event::None
             }
-            _ => Event::None,
+            _ => return,
         }
     }
 }
