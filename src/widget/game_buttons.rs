@@ -1,10 +1,9 @@
 use chess::ChessMove;
 
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size,
+    Element, Event, Length, Rectangle, Renderer, Size,
     advanced::{
-        Clipboard, Layout, Renderer as _, Shell, Widget,
-        graphics::geometry::Renderer as _,
+        Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
         renderer,
         widget::{
@@ -94,7 +93,7 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         let resolved = limits.resolve(self.width, self.height, Size::ZERO);
         let side = resolved.width.min(resolved.height);
         Node::new(Size::new(side, side))

@@ -110,7 +110,7 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         let resolved = limits.resolve(self.width, self.height, Size::ZERO);
         let side = resolved.width.min(resolved.height);
         Node::new(Size::new(side, side))
