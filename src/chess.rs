@@ -17,7 +17,7 @@ impl BoardRole {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct GameState {
     pub board: Board,
     pub annotation: Option<Annotation>,
@@ -39,14 +39,6 @@ pub enum Move {
 }
 
 impl GameState {
-    pub fn new() -> Self {
-        let start = Board::default();
-        Self {
-            board: start,
-            annotation: None,
-        }
-    }
-
     pub fn make_move(&mut self, mv: ChessMove) -> GameState {
         let board = self.board;
         let new_board = self.board.make_move_new(mv);

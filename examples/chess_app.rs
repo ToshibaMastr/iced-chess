@@ -42,7 +42,7 @@ impl ChessApp {
     fn new() -> (Self, Task<Message>) {
         (
             Self {
-                history: vec![GameState::new()],
+                history: vec![GameState::default()],
                 current: 0,
                 flipped: false,
                 side: BoardRole::Player(Color::White),
@@ -81,7 +81,7 @@ impl ChessApp {
                 self.flipped = !self.flipped;
             }
             Message::Restart => {
-                self.history = vec![GameState::new()];
+                self.history = vec![GameState::default()];
                 self.current = 0;
             }
             Message::Next => {
