@@ -80,7 +80,7 @@ where
         tree::State::new(State::new())
     }
 
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&mut self, tree: &mut Tree) {
         let wstate: &mut State = tree.state.downcast_mut();
 
         if self.state != wstate.state {
