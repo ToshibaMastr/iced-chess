@@ -16,6 +16,7 @@ iced = { git = "https://github.com/iced-rs/iced.git", features = [
 ] }
 chess = "3.2.0"
 kira = "0.10.8"
+rust-embed = "8.7.2"
 
 [profile.release]
 opt-level = "z"

@@ -1,5 +1,6 @@
 pub mod overlay;
 pub mod render;
+pub mod sound;
 
 use chess::ChessMove;
 
@@ -91,7 +92,7 @@ where
         tree::State::new(State::new(self.state))
     }
 
-    fn diff(&mut self, tree: &mut Tree) {
+    fn diff(&self, tree: &mut Tree) {
         let wstate: &mut State = tree.state.downcast_mut();
 
         if self.state != wstate.state {
@@ -110,7 +111,7 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
         let resolved = limits.resolve(self.width, self.height, Size::ZERO);
         let side = resolved.width.min(resolved.height);
         Node::new(Size::new(side, side))

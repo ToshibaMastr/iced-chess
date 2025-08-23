@@ -6,6 +6,7 @@ use iced::{
 };
 
 use crate::{
+    assets::Assets,
     opiece::{
         self,
         font::{COL, ROW},
@@ -25,8 +26,16 @@ impl Pieces {
         const PIECE_CHARS: [char; 6] = ['p', 'n', 'b', 'r', 'q', 'k'];
 
         Self {
-            white: PIECE_CHARS.map(|c| format!("{base_path}/w{c}.png").into()),
-            black: PIECE_CHARS.map(|c| format!("{base_path}/b{c}.png").into()),
+            white: PIECE_CHARS.map(|c| {
+                let filename = format!("{base_path}/w{c}.png");
+                let data = Assets::get(&filename).unwrap();
+                image::Handle::from_bytes(data.data.into_owned())
+            }),
+            black: PIECE_CHARS.map(|c| {
+                let filename = format!("{base_path}/b{c}.png");
+                let data = Assets::get(&filename).unwrap();
+                image::Handle::from_bytes(data.data.into_owned())
+            }),
         }
     }
 
@@ -49,7 +58,7 @@ pub struct ChessBoardRenderer {
 
 impl ChessBoardRenderer {
     pub fn new(style: Style, state: BState, bounds: Rectangle) -> Self {
-        let pieces = Pieces::new("assets/pieces");
+        let pieces = Pieces::new("pieces");
         let tile_size = bounds.width.min(bounds.height) / 8.0;
         let tile = Size::new(tile_size, tile_size);
         Self {

@@ -1,7 +1,10 @@
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 
 use kira::{AudioManager, sound::static_sound::StaticSoundData};
+
+use crate::assets::Assets;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub enum SoundType {
@@ -40,8 +43,9 @@ impl Sounds {
         ];
 
         for (kind, file) in files {
-            let path = format!("{base_path}/{file}");
-            let sound = StaticSoundData::from_file(path).unwrap();
+            let filename = format!("{base_path}/{file}");
+            let data = Assets::get(&filename).unwrap();
+            let sound = StaticSoundData::from_cursor(Cursor::new(data.data.into_owned())).unwrap();
             map.insert(kind, sound);
         }
 
@@ -62,7 +66,7 @@ pub struct ChessBoardSound {
 impl ChessBoardSound {
     pub fn new() -> Self {
         let manager = AudioManager::new(Default::default()).unwrap();
-        let sounds = Sounds::new("assets/sounds");
+        let sounds = Sounds::new("sounds");
 
         Self {
             manager: Arc::new(Mutex::new(manager)),

@@ -1,11 +1,11 @@
 use chess::{BitBoard, BoardStatus, ChessMove, File, MoveGen, Piece, Rank, Square};
 use iced::{Point, Rectangle, advanced::Shell, mouse, widget::canvas};
 
-use super::{BState, Caches, Messages};
-use crate::{
-    chess::Move,
+use super::{
+    BState, Caches, Messages,
     sound::{ChessBoardSound, SoundType},
 };
+use crate::chess::Move;
 
 #[derive(Clone)]
 pub struct Overlay {
