@@ -39,9 +39,9 @@ pub enum Move {
 }
 
 impl GameState {
-    pub fn make_move(&mut self, mv: ChessMove) -> GameState {
+    pub fn make_move(&self, mv: ChessMove) -> GameState {
         let board = self.board;
-        let new_board = self.board.make_move_new(mv);
+        let new_board = board.make_move_new(mv);
 
         let source = mv.get_source();
         let dest = mv.get_dest();
@@ -57,7 +57,7 @@ impl GameState {
             && (source.get_file().to_index() as i32 - dest.get_file().to_index() as i32).abs() == 2
         {
             Move::Castling
-        } else if piece == Some(Piece::Pawn) && self.board.en_passant() == dest.backward(color) {
+        } else if piece == Some(Piece::Pawn) && board.en_passant() == dest.backward(color) {
             Move::EnPassant
         } else {
             Move::Normal
